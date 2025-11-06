@@ -127,22 +127,34 @@ async def rules_cmd(m: Message):
     if not rules:
         await m.answer("Правил заміни ще немає.")
         return
-    lines = ["<b>Правила заміни посилань (regex → replacement):</b>"]
-    for rid, pat, rep in rules:
-        lines.append(f"{rid}. <code>{pat}</code> → <code>{rep}</code>")
+    lines = ["<b>Правила заміни посилань:</b>"]
+    for rid, pat, rep, text_rep in rules:
+        if text_rep:
+            lines.append(f"{rid}. <code>{pat}</code> → <code>{rep}</code> ; текст: <code>{text_rep}</code>")
+        else:
+            lines.append(f"{rid}. <code>{pat}</code> → <code>{rep}</code>")
     await m.answer("\n".join(lines))
 
 @dp.message(Command("addrule"))
 async def addrule_cmd(m: Message):
     if not await ensure_admin(m):
         return
-    try:
-        _, pattern, replacement = m.text.strip().split(" ", 2)
-    except ValueError:
-        await m.answer("Синтаксис: /addrule <pattern> <replacement>")
+    # Синтаксис:
+    # /addrule <pattern> <new_url> [new_text]
+    parts = m.text.strip().split(" ", 3)
+    if len(parts) < 3:
+        await m.answer("Синтаксис: /addrule <pattern> <new_url> [new_text]")
         return
-    await add_link_rule(pattern, replacement)
-    await m.answer("Додано правило.")
+
+    pattern = parts[1]
+    new_url = parts[2]
+    new_text = None
+    if len(parts) == 4:
+        new_text = parts[3]  # усе, що після другого пробілу
+
+    await add_link_rule(pattern, new_url, new_text)
+    await m.answer("Додано правило: URL" + (" + текст" if new_text else ""))
+
 
 @dp.message(Command("delrule"))
 async def delrule_cmd(m: Message):
@@ -182,7 +194,7 @@ async def add_dest_from_channel(m: Message):
 # ---------- Mirroring helpers ----------
 async def get_rules():
     rows = await list_link_rules()
-    return [(r[1], r[2]) for r in rows]
+    return [(r[1], r[2], r[3]) for r in rows]  # (pattern, url_repl, text_repl)
 
 async def mirror_to_dests(source_chat_id: int, send_fn):
     dest_ids = await list_mappings_for_source(source_chat_id)
